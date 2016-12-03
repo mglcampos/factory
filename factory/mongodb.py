@@ -39,6 +39,29 @@ class MongoDB(object):
 
         return traders
 
+    def getTradersCurrencies(self):
+        collection = self.db['Traders']
+        results = collection.find()
+        currency = {}
+        currencies = []
+        for trader in results:
+            for trade in trader['open_trades']:
+                if any(trade['currency'] in s for s in currencies):
+                    # currecy : ['eur_usd' : {total : y, buy :
+                    currency[trade['currency']]['total'] += 1
+                    if trade['direction'] == 'Buy':
+                        currency[trade['currency']][trade['direction']] += 1
+                    elif trade['direction'] == 'Sell':
+                        currency[trade['currency']][trade['direction']] += 1
+                else:
+                    currencies.append(trade['currency'])
+                    currency[trade['currency']] = {}
+                    currency[trade['currency']]['total'] = 0
+                    currency[trade['currency']]['Sell'] = 0
+                    currency[trade['currency']]['Buy'] = 0
+
+        return currency, currencies
+
 
     def remove(self, collection):
         if collection == 'News':

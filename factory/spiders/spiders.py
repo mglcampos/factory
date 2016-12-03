@@ -1,12 +1,14 @@
+import datetime
+import time
+from bs4 import BeautifulSoup
+
+import scrapy
 from scrapy import Spider
 from scrapy.spiders import CrawlSpider
-from scrapy.selector import Selector
-import datetime
-import scrapy
-from bs4 import BeautifulSoup
 from selenium import webdriver
-import time
-from mongodb import MongoDB
+
+from factory.mongodb import MongoDB
+
 
 class NewsSpider(Spider):
     ## returns sentiment on pairs and news
@@ -18,47 +20,55 @@ class NewsSpider(Spider):
 
     def __init__(self):
         self.driver = webdriver.Chrome(executable_path='/home/user/drivers/chromedriver')
+        # self.driver = webdriver.PhantomJS()
 
     def parse(self, response):
 
+        self.driver.get(response.url)
+        next = self.driver.find_element_by_xpath(
+            '//*[@id="flexBox_flex_trades/positions_tradesPositionsCopy1"]/div[4]/ul/li/a')
+        next.click()
+        time.sleep(3)
 
         table_content = {'day': '', 'content': []}
         data = []
         sentiments_table = {'day': '', 'sentiments': []}
         content = {}
-        soup = BeautifulSoup(Selector(response).extract())
-        table = soup.find('table', { "class" : "calendar__table" })
+        # soup = BeautifulSoup(Selector(response).extract())
+        # table = soup.find('table', { "class" : "calendar__table" })
+        #
+        #
+        # rows = table.findAll('tr')
+        # for tr in rows:
+        #     # cols = tr.find_all('td')
+        #     # cols = [ele.text.strip() for ele in cols]
+        #     # # print('table_content', cols)
+        #     # ##TODO fix this
+        #     #
+        #     # data.append([ele for ele in cols if ele])
+        #
+        #     print("ROW -- -- ---", tr.find('td', {"class" : "calendar__cell calendar__currency currency"}))
 
-        rows = table.findAll('tr')
-        for tr in rows:
-            cols = tr.find_all('td')
-            cols = [ele.text.strip() for ele in cols]
-            print('table_content', cols)
-            ##TODO fix this
-            if len(cols) == 10:
-                data.append([ele for ele in cols if ele])
+        # for row in data:
+        #     if len(row) >3:
+        #         pass
 
-        for row in data:
-
-            if len(row) == 7:
-                table_content['day'] = row[0]
-                table_content['content'].append(
-                    {'time': row[1], 'currency': row[2], 'event': row[3], 'actual': row[4], 'forecast': row[5],
-                     'previous': row[6]})
-
-            elif len(row) == 6:
-                table_content['content'].append({'time': row[0], 'currency': row[1], 'event': row[2], 'actual': row[3],
-                                                 'forecast': row[4], 'previous': row[5]})
-            elif len(row) == 5:
-                table_content['content'].append({'time': None, 'currency': row[0], 'event': row[1], 'actual': row[2],
-                                                 'forecast': row[3], 'previous': row[4]})
+            # if len(row) == 7:
+            #     table_content['day'] = row[0]
+            #     table_content['content'].append(
+            #         {'time': row[1], 'currency': row[2], 'event': row[3], 'actual': row[4], 'forecast': row[5],
+            #          'previous': row[6]})
+            #
+            # elif len(row) == 6:
+            #     table_content['content'].append({'time': row[0], 'currency': row[1], 'event': row[2], 'actual': row[3],
+            #                                      'forecast': row[4], 'previous': row[5]})
+            # elif len(row) == 5:
+            #     table_content['content'].append({'time': None, 'currency': row[0], 'event': row[1], 'actual': row[2],
+            #                                      'forecast': row[3], 'previous': row[4]})
+            #     print('table_content', table_content['content'][:-1])
 
         data = []
-        self.driver.get(response.url)
-        next = self.driver.find_element_by_xpath(
-            '//*[@id="flexBox_flex_trades/positions_tradesPositionsCopy1"]/div[4]/ul/li/a')
-        next.click()
-        time.sleep(2)
+
         soup = BeautifulSoup(self.driver.page_source)
         sentiments = soup.find('div', {"class": "flexBox trades_positions traders trades_positions--traders trades_positions--ishomepage trades_positions--more"})
         divs = sentiments.findAll('table', {"class": "trades_position"})
@@ -74,8 +84,10 @@ class NewsSpider(Spider):
             content['Long_Traders'] = [content['Long_Traders'][0], content['Long_Traders'][1]]
             content['Short_Traders'] = sentiments[1].split(' ')
             content['Short_Traders'] = [content['Short_Traders'][2],content['Short_Traders'][0]]
-            print("Sentiments", content)
-            data.append(content)
+            x = dict(content)
+            data.append(x)
+
+
         sentiments_table['day'] = datetime.datetime.now()
         sentiments_table['sentiments'] = data
         mongo = MongoDB()
@@ -135,7 +147,7 @@ class RankingSpider(Spider):
 
 
 class TradersSpider(CrawlSpider):
-    ## returns sentiment on pairs and news
+
     name = "traders"
     allowed_domains = ["*"]
     start_urls = [
@@ -160,7 +172,7 @@ class TradersSpider(CrawlSpider):
         print("URL-------------------", response.url)
         data = {'returns': [], 'trades': []}
         self.driver.get(response.url)
-        time.sleep(2)
+        time.sleep(3)
         soup = BeautifulSoup(self.driver.page_source)
         status = soup.find('th', {"class": "crunched slidetable__header slidetable__header--fixed"})
         if status:
@@ -173,16 +185,22 @@ class TradersSpider(CrawlSpider):
                 for tr in rows:
                     cols = tr.find_all('td')
                     cols = [ele.text.strip() for ele in cols]
-                    if len(cols) == 22:
+                    print("pre len(cols) == 22", len(cols))
+                    if len(cols) > 19:
                         open_trades = cols
-                        print('Open trades', open_trades[0])
-                        if len(open_trades[0]) == 3:
+                        # print('Open trades', open_trades[0])
+                        print(" len(cols) == 22",len(open_trades[0]))
+                        if len(open_trades[0]) > 2:
                             trade = open_trades[0].split(' ')
-                            currency = trade[0]
-                            direction = trade[1]
-                            value = trade[2]
-                            data['trades'].append({'currency': currency, 'direction' : direction, 'value' : value ,'takeProfit' : open_trades[16]})
-
+                            if len(trade) > 2:
+                                print('trade', trade)
+                                currency = trade[0]
+                                direction = trade[1]
+                                value = trade[2]
+                                ##TODO change takeProfit
+                                trades = dict({'currency': currency, 'direction' : direction, 'value' : value ,'takeProfit' : open_trades[16]})
+                                print('Open trades', trades)
+                                data['trades'].append(trades)
 
                     elif len(cols) == 12:
                         returns = cols
@@ -194,9 +212,9 @@ class TradersSpider(CrawlSpider):
                 name = name[1]
                 print ('open_trades', len(cols), data['trades'])
                 print ('returns', len(cols), data['returns'])
-                trader = {'name': name, 'returns': data['returns'], 'open_trades':data['trades'], 'last_updated' : datetime.datetime.now()}
+                trader = {'name': name, 'returns': data['returns'], 'open_trades': data['trades'], 'last_updated' : datetime.datetime.now()}
 
                 self.mongo.addTraders(trader, name)
 
-                ##TODO write on MongoDB
+
 
